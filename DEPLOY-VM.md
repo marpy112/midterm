@@ -3,8 +3,9 @@
 Everything installed by hand: Node.js runtime, MongoDB, the app, a systemd
 service, and a firewall that opens only the ports actually used.
 
-Tested against **Ubuntu 24.04 LTS**. Replace `24.04`/`noble` with `22.04`/`jammy`
-if that is your release.
+Works on any current Ubuntu LTS. The MongoDB step derives your release codename
+automatically, so nothing needs editing by hand - verified on **Ubuntu 26.04
+(resolute)** and **24.04 (noble)**.
 
 ---
 
@@ -92,20 +93,33 @@ sudo apt install -y nodejs
 node -v && npm -v        # expect v22.x
 ```
 
-## Step 3 - Install MongoDB 7 (the database)
+## Step 3 - Install MongoDB 8.0 (the database)
+
+MongoDB publishes its own apt repository per Ubuntu codename. `$(lsb_release -cs)`
+fills in yours (`resolute` on 26.04, `noble` on 24.04), so these lines work
+unchanged on either.
 
 ```bash
-curl -fsSL https://pgp.mongodb.com/server-7.0.asc \
-  | sudo gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg
+curl -fsSL https://pgp.mongodb.com/server-8.0.asc | sudo gpg --yes --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
+```
 
-echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/7.0 multiverse" \
-  | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+```bash
+echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+```
 
+```bash
 sudo apt update
 sudo apt install -y mongodb-org
 sudo systemctl enable --now mongod
 sudo systemctl status mongod --no-pager
 ```
+
+Check the repository resolved before installing - `apt update` must not report
+`404 Not Found` for repo.mongodb.org. If it does, that codename has no packages
+yet; substitute the previous LTS codename (`noble`) in the line above.
+
+Note the `--yes` on `gpg --dearmor`: without it, gpg stops to ask whether to
+overwrite an existing keyring and then silently waits for input.
 
 ## Step 4 - Secure MongoDB (auth on, bound to localhost)
 
@@ -213,6 +227,21 @@ Expected log lines:
 ```
 MongoDB connected: 127.0.0.1/crud_demo
 API listening on http://localhost:3000
+```
+
+## Step 7b - If the Docker containers are already running
+
+The container from part 1.3 also publishes port 3000, so the systemd service
+cannot bind it. Stop the containers while demonstrating this deployment:
+
+```bash
+cd ~/midterm && docker compose down
+```
+
+Bring them back afterwards on a different port so both can run at once:
+
+```bash
+cd ~/midterm && echo "APP_PORT=8080" >> .env && docker compose up -d
 ```
 
 ## Step 8 - Firewall: only the ports you actually need
