@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Task CRUD</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    /* one shared track definition so the header and every row line up */
+    --cols: minmax(0, 1fr) 9rem 11rem 9.5rem;
+    --gap: .75rem;
+  }
+  * { box-sizing: border-box; }
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 880px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.4rem; }
+  input, select, button { padding: .5rem; font: inherit; }
+
+  form#create {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 9rem 9.5rem;
+    gap: var(--gap);
+    margin-bottom: 1.5rem;
+  }
+  form#create > * { width: 100%; }
+
+  ul { list-style: none; padding: 0; margin: 0; }
+  .row {
+    display: grid;
+    grid-template-columns: var(--cols);
+    gap: var(--gap);
+    align-items: center;
+  }
+  .head {
+    font-size: .75rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    opacity: .6;
+    padding-bottom: .4rem;
+    border-bottom: 1px solid #8884;
+  }
+  li { padding: .6rem 0; border-bottom: 1px solid #8884; }
+  li.editing { background: #8881; }
+
+  .title { min-width: 0; overflow-wrap: anywhere; }
+  .status { width: 100%; font-size: .85rem; }
+  .created { font-size: .85rem; opacity: .75; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .actions { display: flex; gap: .4rem; justify-content: flex-end; }
+  .actions button { flex: 1; padding: .4rem .5rem; }
+  .edit-fields { display: grid; gap: .35rem; min-width: 0; }
+  .edit-fields input { width: 100%; }
+  .err { color: #c0392b; }
+
+  @media (max-width: 680px) {
+    :root { --cols: minmax(0, 1fr) 9.5rem; }
+    form#create { grid-template-columns: minmax(0, 1fr) 9.5rem; }
+    .created, .head > :nth-child(2), .head > :nth-child(3) { display: none; }
+    .status { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+  <h1>Tasks</h1>
+
+  <form id="create">
+    <input name="title" placeholder="Title" required />
+    <input name="description" placeholder="Description" />
+    <select name="status">
+      <option value="todo">todo</option>
+      <option value="in-progress">in-progress</option>
+      <option value="done">done</option>
+    </select>
+    <button type="submit">Add</button>
+  </form>
+
+  <p id="error" class="err"></p>
+
+  <div class="row head">
+    <span>Task</span><span>Status</span><span>Created</span><span></span>
+  </div>
+  <ul id="list"></ul>
+
+<script type="module">
+const API = '/api/tasks';
+const list = document.getElementById('list');
+const error = document.getElementById('error');
+const STATUSES = ['todo', 'in-progress', 'done'];
+
+const fmt = new Intl.DateTimeFormat(undefined, {
+  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+});
+
+let editingId = null;   // id of the row currently in edit mode
+let tasks = [];
+
+async function api(path, options) {
+  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...options });
+  if (res.status === 204) return null;
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.details?.join(', ') || body.error || 'Request failed');
+  return body;
+}
+
+async function load() {
+  error.textContent = '';
+  try {
+    ({ data: tasks } = await api(API));
+    draw();
+  } catch (e) { error.textContent = e.message; }
+}
+
+function draw() {
+  list.replaceChildren(...tasks.map((t) => (t.id === editingId ? editRow(t) : viewRow(t))));
+}
+
+function statusSelect(task, onchange) {
+  const select = document.createElement('select');
+  select.className = 'status';
+  for (const s of STATUSES) select.append(new Option(s, s, false, s === task.status));
+  if (onchange) select.onchange = onchange;
+  return select;
+}
+
+function timeCell(task) {
+  const created = document.createElement('time');
+  created.className = 'created';
+  created.dateTime = task.createdAt;
+  created.textContent = fmt.format(new Date(task.createdAt));
+  created.title = `Created ${new Date(task.createdAt).toLocaleString()}`
+    + `\nUpdated ${new Date(task.updatedAt).toLocaleString()}`;
+  return created;
+}
+
+// ---- read-only row -------------------------------------------------------
+function viewRow(task) {
+  const li = document.createElement('li');
+  li.className = 'row';
+
+  const title = document.createElement('span');
+  title.className = 'title';
+  title.textContent = task.description ? `${task.title} — ${task.description}` : task.title;
+
+  // quick inline UPDATE of just the status
+  const status = statusSelect(task, (ev) => act(() => api(`${API}/${task.id}`, {
+    method: 'PATCH', body: JSON.stringify({ status: ev.target.value }),
+  })));
+
+  const edit = document.createElement('button');
+  edit.textContent = 'Edit';
+  edit.onclick = () => { editingId = task.id; error.textContent = ''; draw(); };
+
+  const del = document.createElement('button');
+  del.textContent = 'Delete';
+  del.onclick = () => {
+    if (!confirm(`Delete "${task.title}"?`)) return;
+    act(() => api(`${API}/${task.id}`, { method: 'DELETE' }));
+  };
+
+  const actions = document.createElement('span');
+  actions.className = 'actions';
+  actions.append(edit, del);
+
+  li.append(title, status, timeCell(task), actions);
+  return li;
+}
+
+// ---- edit row (full UPDATE) ---------------------------------------------
+function editRow(task) {
+  const li = document.createElement('li');
+  li.className = 'row editing';
+
+  const fields = document.createElement('div');
+  fields.className = 'edit-fields';
+  const titleInput = document.createElement('input');
+  titleInput.value = task.title;
+  titleInput.placeholder = 'Title';
+  const descInput = document.createElement('input');
+  descInput.value = task.description || '';
+  descInput.placeholder = 'Description';
+  fields.append(titleInput, descInput);
+
+  const status = statusSelect(task);
+
+  const save = document.createElement('button');
+  save.textContent = 'Save';
+  save.onclick = () => act(async () => {
+    await api(`${API}/${task.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: titleInput.value,
+        description: descInput.value,
+        status: status.value,
+      }),
+    });
+    editingId = null;
+  });
+
+  const cancel = document.createElement('button');
+  cancel.textContent = 'Cancel';
+  cancel.onclick = () => { editingId = null; error.textContent = ''; draw(); };
+
+  titleInput.onkeydown = descInput.onkeydown = (ev) => {
+    if (ev.key === 'Enter') save.click();
+    if (ev.key === 'Escape') cancel.click();
+  };
+
+  const actions = document.createElement('span');
+  actions.className = 'actions';
+  actions.append(save, cancel);
+
+  li.append(fields, status, timeCell(task), actions);
+  setTimeout(() => titleInput.focus(), 0);
+  return li;
+}
+
+async function act(fn) {
+  error.textContent = '';
+  try { await fn(); await load(); } catch (e) { error.textContent = e.message; }
+}
+
+document.getElementById('create').onsubmit = (ev) => {
+  ev.preventDefault();
+  const form = ev.target;
+  const body = JSON.stringify(Object.fromEntries(new FormData(form)));
+  act(async () => { await api(API, { method: 'POST', body }); form.reset(); });
+};
+
+load();
+</script>
+</body>
+</html>

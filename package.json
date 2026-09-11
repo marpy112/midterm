@@ -1,0 +1,21 @@
+{
+  "name": "mongo-crud-api",
+  "version": "1.0.0",
+  "description": "Simple CRUD REST API with Express and MongoDB (Mongoose)",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "node src/seed.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongoose": "^8.9.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
