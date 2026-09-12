@@ -1,34 +1,30 @@
 services:
+
+  # The database, straight from Docker Hub - nothing to build.
   mongo:
     image: mongo:7
     restart: unless-stopped
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-appuser}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}
-      MONGO_INITDB_DATABASE: ${MONGO_DB:-crud_demo}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
     volumes:
+      # Keeps the data when containers are recreated.
       - mongo-data:/data/db
-    # No "ports:" on purpose - the database is only reachable from the app
-    # over the private compose network, never from the host or the internet.
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
+    # No "ports" here on purpose: only the app can reach the database.
 
+  # Our app, built from the Dockerfile in this folder.
   app:
     build: .
     restart: unless-stopped
     environment:
       PORT: 3000
-      # Credentials come from the environment, never from the image or source.
-      MONGODB_URI: mongodb://${MONGO_ROOT_USER:-appuser}:${MONGO_ROOT_PASSWORD}@mongo:27017/${MONGO_DB:-crud_demo}?authSource=admin
+      # "mongo" is the service name above - Docker resolves it for us.
+      MONGODB_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongo:27017/crud_demo?authSource=admin
     ports:
-      - "${APP_PORT:-3000}:3000"
+      # host port : container port. Change the left number to move it.
+      - "3000:3000"
     depends_on:
-      mongo:
-        condition: service_healthy
+      - mongo
 
 volumes:
   mongo-data:
