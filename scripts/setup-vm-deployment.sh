@@ -27,6 +27,9 @@ if [ -f "$SRC_DIR/docker-compose.yml" ] && command -v docker >/dev/null 2>&1; th
 fi
 
 step "1/7  Install MongoDB $MONGO_SERIES"
+# A desktop install does not ship curl or gnupg; a server install does.
+apt-get update
+apt-get install -y curl gnupg ca-certificates
 curl -fsSL https://pgp.mongodb.com/server-8.0.asc \
   | gpg --yes --dearmor -o /usr/share/keyrings/mongodb-server-8.0.gpg
 echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/$MONGO_SERIES multiverse" \

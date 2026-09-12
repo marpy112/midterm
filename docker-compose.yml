@@ -1,6 +1,5 @@
 services:
 
-  # The database, straight from Docker Hub - nothing to build.
   mongo:
     image: mongo:7
     restart: unless-stopped
@@ -8,20 +7,15 @@ services:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
     volumes:
-      # Keeps the data when containers are recreated.
       - mongo-data:/data/db
-    # No "ports" here on purpose: only the app can reach the database.
 
-  # Our app, built from the Dockerfile in this folder.
   app:
     build: .
     restart: unless-stopped
     environment:
       PORT: 3000
-      # "mongo" is the service name above - Docker resolves it for us.
       MONGODB_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongo:27017/crud_demo?authSource=admin
     ports:
-      # host port : container port. Change the left number to move it.
       - "3000:3000"
     depends_on:
       - mongo
