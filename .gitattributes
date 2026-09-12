@@ -1,0 +1,6 @@
+# core.autocrlf=true would hand Windows checkouts CRLF shell scripts, which
+# Linux rejects with "bad interpreter: /usr/bin/env bash^M". Pin them to LF so
+# the scripts survive being copied straight from Windows onto the VM.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.yml       text eol=lf

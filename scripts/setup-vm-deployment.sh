@@ -21,9 +21,18 @@ APP_PORT=3000
 
 step() { echo; echo "=============== $* ==============="; }
 
-step "0/7  Free port $APP_PORT (stop the Docker deployment if it is running)"
-if [ -f "$SRC_DIR/docker-compose.yml" ] && command -v docker >/dev/null 2>&1; then
-  ( cd "$SRC_DIR" && docker compose down ) || true
+step "0/7  Make sure port $APP_PORT is free"
+# The Docker deployment publishes ${APP_PORT:-3000} too. Rather than tearing it
+# down (the demo needs both deployments up at the same time), move the
+# containers to 8080 and leave 3000 for this systemd service.
+if ss -ltn "sport = :$APP_PORT" 2>/dev/null | grep -q ":$APP_PORT"; then
+  echo "Port $APP_PORT is already in use."
+  if [ -f "$SRC_DIR/docker-compose.yml" ] && command -v docker >/dev/null 2>&1; then
+    echo "If that is the Docker deployment, republish it on 8080 instead:"
+    echo "    cd $SRC_DIR && echo APP_PORT=8080 >> .env && docker compose up -d"
+    echo "Then re-run this script. Both deployments can then run side by side."
+  fi
+  exit 1
 fi
 
 step "1/7  Install MongoDB $MONGO_SERIES"
